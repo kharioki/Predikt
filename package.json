@@ -1,0 +1,37 @@
+{
+    "name": "Predikt",
+    "version": "1.0.0",
+    "description": "Custom Celo Composer project.",
+    "private": true,
+    "author": "Celo",
+    "license": "MIT",
+    "scripts": {
+        "react-app:dev": "yarn workspace @Predikt/react-app dev",
+        "react-app:build": "yarn workspace @Predikt/react-app build",
+        "react-app:start": "yarn workspace @Predikt/react-app start",
+        "react-app:lint": "yarn workspace @Predikt/react-app lint",
+        "hardhat:test": "yarn workspace @Predikt/hardhat test",
+        "hardhat:test-local": "yarn workspace @Predikt/hardhat test-local",
+        "hardhat:accounts": "yarn workspace @Predikt/hardhat accounts",
+        "hardhat:devchain": "yarn workspace @Predikt/hardhat devchain",
+        "hardhat:deploy": "yarn workspace @Predikt/hardhat deploy",
+        "hardhat:deploy-reset-watch": "yarn workspace @Predikt/hardhat deploy-reset-watch",
+        "hardhat:watch": "yarn workspace @Predikt/hardhat watch",
+        "hardhat:fork-mainnet": "yarn workspace @Predikt/hardhat fork-mainnet"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/celo-org/celo-composer.git"
+    },
+    "bugs": {
+        "url": "https://github.com/celo-org/celo-composer/issues"
+    },
+    "homepage": "https://github.com/celo-org/celo-composer/blob/main/README.md",
+    "workspaces": [
+        "packages/*"
+    ],
+    "keywords": [
+        "celo-composer",
+        "celo"
+    ]
+}
