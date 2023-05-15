@@ -8,8 +8,12 @@ module.exports = {
     extend: {
       colors: {
         /** primary */
+        "lime": "#E4FC65",
         "prosperity": "#FCFF52",
         "forest": "#476520",
+        "charcoal": "#302F3D",
+        "ash": "#4D4C5E",
+        "slate": "#F7F7F7",
         /** base */
         "gypsum": "#FCF6F1",
         "sand": "#E7E3D4",
