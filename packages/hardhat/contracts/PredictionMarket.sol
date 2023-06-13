@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.0;
 
 // remember to remove unnecessary imports and its use when deploying your smart contract
 import "hardhat/console.sol";
@@ -37,38 +37,36 @@ interface IERC20Token {
  */
 
 contract PredictionMarket {
-    // struct for possible options for a market event - e.g. for a market event "Who will win the 2021 NBA Championship?", the options would be "Lakers", "Nets", "Clippers", etc.
-    // struct option {
-    //     string name;
-    //     uint256 totalBets;
-    //     mapping(address => uint256) bets;
-    // }
-    address internal cUsdTokenAddress =
-        0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1;
+    address internal cUsdTokenAddress = 0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1;
+
     uint internal marketEventsLength = 0;
+    uint internal betsLength = 0;
 
     // struct for a market event
     struct MarketEvent {
         string title;
-        string description;
-        string image;
         uint256 createdAt;
         string category;
         address payable creator;
-        string[] options;
+        Option[] options;
         bool isOpen;
-        uint256 totalBets;
-        uint256 totalCreditsRedeemed;
-        uint256 totalBettors;
-        uint256 totalWinners;
-        uint256 totalCreditsRetired;
+        uint volume;
+        uint totalBets;
+        uint totalCreditsRedeemed;
+        string outcome;
+    }
+
+    // struct for options for a market event - should have name, odds, and total bets
+    struct Option {
+        string name;
+        uint odds;
+        uint totalBets;
+        uint volume;
     }
 
     // event for when a market event is created
     event MarketEventCreated(
         string title,
-        string description,
-        string image,
         uint256 createdAt,
         string category,
         address creator
@@ -76,64 +74,35 @@ contract PredictionMarket {
 
     // struct for a bet
     struct Bet {
-        uint256 amount;
-        uint256 optionIndex;
+        uint amount;
+        uint optionIndex;
         uint256 createdAt;
-        address bettor;
-        uint256 creditsRedeemed;
+        address payable bettor;
+        uint creditsRedeemed;
+        uint marketEventId;
     }
 
     // event for when a bet is placed
     event BetPlaced(
-        uint256 amount,
-        uint256 optionIndex,
+        uint amount,
+        uint optionIndex,
         uint256 createdAt,
         address bettor,
-        uint256 creditsRedeemed
+        uint creditsRedeemed,
+        uint marketEventId
     );
 
-    mapping(uint => MarketEvent) internal marketEvents;
+    mapping(uint => MarketEvent) public marketEvents;
+    // MarketEvent[] public marketEvents;
 
-    // map of bets for a market event
-    mapping(uint => Bet[]) internal bets;
-
-    // map of credits redeemed for a market event
-    mapping(uint => uint256) internal _creditsRedeemed;
+    mapping(uint => Bet) public bets;
 
     function getMarketEventsLength() public view returns (uint) {
         return marketEventsLength;
     }
 
-    // function to calculate the credits to be redeemed for a bet, with a minimum of 1 credit
-    function calculateCreditsToBeRedeemed(
-        uint256 marketEventId,
-        uint256 betId
-    ) public view returns (uint256) {
-        uint256 creditsRedeemed = (bets[marketEventId][betId].amount * 100) /
-            marketEvents[marketEventId].totalBets;
-        if (creditsRedeemed == 0) {
-            return 1;
-        }
-        return creditsRedeemed;
-    }
-
-    // function to calculate the odds for a market event
-    function calculateOdds(
-        uint256 marketEventId
-    ) public view returns (uint256[] memory) {
-        uint256[] memory odds = new uint256[](
-            marketEvents[marketEventId].options.length
-        );
-        for (
-            uint256 i = 0;
-            i < marketEvents[marketEventId].options.length;
-            i++
-        ) {
-            odds[i] =
-                (marketEvents[marketEventId].totalBets * 100) /
-                marketEvents[marketEventId].totalBets;
-        }
-        return odds;
+    function getBetsLength() public view returns (uint) {
+        return betsLength;
     }
 
     // validate when creating a market event
@@ -151,42 +120,38 @@ contract PredictionMarket {
     // create a market event
     function createMarketEvent(
         string memory title,
-        string memory description,
-        string memory image,
         string memory category,
-        string[] memory options
+        string[] memory _options
     ) public {
-        require(validateData(title, category, options), "Invalid data");
+        require(validateData(title, category, _options), "Invalid data");
         uint256 createdAt = block.timestamp;
-        marketEvents[marketEventsLength] = MarketEvent(
-            title,
-            description,
-            image,
-            createdAt,
-            category,
-            payable(msg.sender),
-            options,
-            true,
-            0,
-            0,
-            0,
-            0,
-            0
-        );
-        emit MarketEventCreated(
-            title,
-            description,
-            image,
-            createdAt,
-            category,
-            msg.sender
-        );
+
+        MarketEvent storage marketEvent = marketEvents[marketEventsLength];
+
+        marketEvent.title = title;
+        marketEvent.createdAt = createdAt;
+        marketEvent.category = category;
+        marketEvent.creator = payable(msg.sender);
+        marketEvent.isOpen = true;
+        marketEvent.volume = 0;
+        marketEvent.totalBets = 0;
+        marketEvent.totalCreditsRedeemed = 0;
+        marketEvent.outcome = "";
+
+        // Add options to the market event
+        for (uint256 i = 0; i < _options.length; i++) {
+            Option memory option = Option(_options[i], 0, 0, 0);
+            marketEvent.options.push(option);
+        }
+
+        emit MarketEventCreated(title, createdAt, category, msg.sender);
+
         marketEventsLength++;
     }
 
     // function to get a market event
     function getMarketEvent(
-        uint256 marketEventId
+        uint marketEventId
     ) public view returns (MarketEvent memory) {
         return marketEvents[marketEventId];
     }
@@ -196,92 +161,123 @@ contract PredictionMarket {
         MarketEvent[] memory _marketEvents = new MarketEvent[](
             marketEventsLength
         );
-        for (uint256 i = 0; i < marketEventsLength; i++) {
+        for (uint i = 0; i < marketEventsLength; i++) {
             _marketEvents[i] = marketEvents[i];
         }
         return _marketEvents;
     }
 
     // function to get all bets for a market event
-    function getBets(uint256 marketEventId) public view returns (Bet[] memory) {
-        return bets[marketEventId];
-    }
 
     // function to place a bet - requires a market event id, the amount to bet, and the option index to bet on
     function placeBet(
-        uint256 marketEventId,
-        uint256 amount,
-        uint256 optionIndex
+        uint marketEventId,
+        uint amount,
+        uint optionIndex,
+        uint creditsRedeemed
     ) public payable {
+        // first check if the market event is open
         require(marketEvents[marketEventId].isOpen, "Market event is closed");
+        // check if the option index is valid
         require(
             optionIndex < marketEvents[marketEventId].options.length,
             "Invalid option"
         );
+        // check if the amount is greater than 0
         require(amount > 0, "Amount must be greater than 0");
-        require(msg.value == amount, "Amount must be equal to value sent");
+        // check if the amount is less than or equal to the balance of the bettor
+        require(
+            IERC20Token(cUsdTokenAddress).balanceOf(msg.sender) >= amount,
+            "Insufficient balance"
+        );
+        // check that the bettor is not the creator of the market event
+        require(
+            msg.sender != marketEvents[marketEventId].creator,
+            "Creator cannot bet"
+        );
 
-        MarketEvent storage marketEvent = marketEvents[marketEventId];
-
-        // transfer cUSD from sender to contract
+        // transfer the amount from the bettor to the contract
         require(
             IERC20Token(cUsdTokenAddress).transferFrom(
                 msg.sender,
-                marketEvent.creator,
+                address(this),
                 amount
             ),
             "Transfer failed"
         );
 
-        uint256 createdAt = block.timestamp;
-        address bettor = msg.sender;
-        uint256 creditsRedeemed = calculateCreditsToBeRedeemed(
-            marketEventId,
-            bets[marketEventId].length
+        // update the market event
+        MarketEvent storage marketEvent = marketEvents[marketEventId];
+        marketEvent.volume += amount;
+        marketEvent.totalBets += 1;
+        marketEvent.options[optionIndex].totalBets += 1;
+        marketEvent.options[optionIndex].volume += amount;
+
+        // create the bet
+        Bet storage bet = bets[betsLength];
+        bet.amount = amount;
+        bet.optionIndex = optionIndex;
+        bet.createdAt = block.timestamp;
+        bet.bettor = payable(msg.sender);
+        bet.creditsRedeemed = creditsRedeemed;
+        bet.marketEventId = marketEventId;
+
+        emit BetPlaced(
+            amount,
+            optionIndex,
+            block.timestamp,
+            msg.sender,
+            creditsRedeemed,
+            marketEventId
         );
-        bets[marketEventId].push(
-            Bet(amount, optionIndex, createdAt, bettor, creditsRedeemed)
-        );
-        marketEvents[marketEventId].totalBets += amount;
-        marketEvents[marketEventId].totalBettors++;
-        marketEvents[marketEventId].totalCreditsRedeemed += creditsRedeemed;
-        emit BetPlaced(amount, optionIndex, createdAt, bettor, creditsRedeemed);
+
+        betsLength++;
     }
 
     // function to complete event - calculate winners and transfer cUSD to winners
-    // function completeEvent(uint256 marketEventId, uint256 optionIndex)
-    //     public
-    //     payable
-    // {
-    //     require(marketEvents[marketEventId].isOpen, "Market event is closed");
-    //     require(optionIndex < marketEvents[marketEventId].options.length, "Invalid option");
-    //     MarketEvent storage marketEvent = marketEvents[marketEventId];
-    //     marketEvent.isOpen = false;
-    //     uint256 totalCreditsRedeemed = marketEvent.totalCreditsRedeemed;
-    //     uint256 totalBets = marketEvent.totalBets;
-    //     uint256 totalWinners = 0;
-    //     uint256 totalCreditsRetired = 0;
-    //     for (uint256 i = 0; i < bets[marketEventId].length; i++) {
-    //         if (bets[marketEventId][i].optionIndex == optionIndex) {
-    //             totalWinners++;
-    //             totalCreditsRetired += bets[marketEventId][i].creditsRedeemed;
-    //         }
-    //     }
-    //     uint256 creditsPerWinner = totalCreditsRedeemed / totalWinners;
-    //     for (uint256 i = 0; i < bets[marketEventId].length; i++) {
-    //         if (bets[marketEventId][i].optionIndex == optionIndex) {
-    //             // transfer cUSD from contract to winner
-    //             require(
-    //                 IERC20Token(cUsdTokenAddress).transferFrom(
-    //                     marketEvent.creator,
-    //                     bets[marketEventId][i].bettor,
-    //                     creditsPerWinner
-    //                 ),
-    //                 "Transfer failed"
-    //             );
-    //         }
-    //     }
-    //     marketEvent.totalWinners = totalWinners;
-    //     marketEvent.totalCreditsRetired = totalCreditsRetired;
-    // }
+    function completeEvent(uint marketEventId, uint outcome) public payable {
+        require(marketEvents[marketEventId].isOpen, "Market event is closed");
+        // outcome should be the index of the winning option
+        require(
+            outcome < marketEvents[marketEventId].options.length,
+            "Invalid outcome"
+        );
+
+        MarketEvent storage marketEvent = marketEvents[marketEventId];
+
+        marketEvent.isOpen = false;
+
+        // first find the total bets for the winning option
+        // loop through bets and find the bets where marketEventId = marketEventId and optionIndex = outcome
+        // for each bet, calculate the percentage of amount to transfer to the bettor based on the odds
+
+        for (uint i = 0; i < betsLength; i++) {
+            if (
+                bets[i].optionIndex == outcome &&
+                bets[i].marketEventId == marketEventId
+            ) {
+                // calculate the amount to transfer to the bettor - deduct 1% for the house
+                uint amountToTransfer = (((bets[i].amount /
+                    marketEvent.options[outcome].volume) * marketEvent.volume) *
+                    99) / 100;
+
+                // transfer the amount to the bettor
+                require(
+                    IERC20Token(cUsdTokenAddress).transferFrom(
+                        marketEvent.creator,
+                        bets[i].bettor,
+                        amountToTransfer
+                    ),
+                    "Transfer failed"
+                );
+            }
+        }
+
+        // update the market event
+        marketEvent.outcome = marketEvent.options[outcome].name;
+    }
 }
+
+0xdC70764360Ad6c50756059b840B24a86923ae545
+
+0xb4161ebf8f170c033fb75b426e660520d48850df
